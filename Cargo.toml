@@ -1,0 +1,20 @@
+[package]
+name = "tk-carbon"
+description = """
+    Implementation of carbon (graphite) client protocol on top of tokio-rs
+"""
+license = "MIT/Apache-2.0"
+readme = "README.rst"
+keywords = ["tokio", "carbon", "graphite", "metrics"]
+categories = ["asynchronous", "network-programming"]
+homepage = "http://github.com/tailhook/tk-carbon"
+documentation = "http://docs.rs/tk-carbon"
+version = "0.1.0"
+authors = ["paul@colomiets.name"]
+
+[dependencies]
+tokio-core = "0.1.4"
+futures = "0.1.10"
+log = "0.3.6"
+abstract-ns = "0.2.4"
+num-traits = "0.1.36"
