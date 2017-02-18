@@ -2,22 +2,25 @@ use std::io;
 use std::time::Duration;
 
 use futures::{Stream, Future, Async};
+use futures::stream::Fuse;
 use tk_bufstream::IoBuf;
 use tokio_core::io::Io;
 use tokio_core::reactor::{Handle, Timeout};
 
+use element::Metric;
+
 
 /// Low-level interface to a single carbon connection
-pub struct Proto<T: Io, S: Stream> {
+pub struct Proto<T: Io, S: Stream<Item=Metric, Error=()>> {
     io: IoBuf<T>,
-    channel: S,
+    channel: Fuse<S>,
     timeout: Duration,
     timeo: Timeout,
     handle: Handle,
     waterline: usize,
 }
 
-impl<T: Io, S: Stream> Proto<T, S> {
+impl<T: Io, S: Stream<Item=Metric, Error=()>> Proto<T, S> {
     /// Wrap existing connection into a future that implements carbon protocol
     pub fn new(conn: T, metric_stream: S,
         write_timeout: Duration,
@@ -27,7 +30,7 @@ impl<T: Io, S: Stream> Proto<T, S> {
     {
         Proto {
             io: IoBuf::new(conn),
-            channel: metric_stream,
+            channel: metric_stream.fuse(),
             timeout: write_timeout,
             timeo: Timeout::new(write_timeout, &handle)
                 .expect("can always set a timeout"),
@@ -37,7 +40,7 @@ impl<T: Io, S: Stream> Proto<T, S> {
     }
 }
 
-impl<T: Io, S: Stream> Future for Proto<T, S> {
+impl<T: Io, S: Stream<Item=Metric, Error=()>> Future for Proto<T, S> {
     type Item = ();
     type Error = ();
     fn poll(&mut self) -> Result<Async<()>, ()> {
@@ -50,12 +53,31 @@ impl<T: Io, S: Stream> Future for Proto<T, S> {
             // connection closed by peer is just finish of a future
             return Ok(Async::Ready(()));
         }
+        if self.io.out_buf.len() >= self.waterline {
+            self.flush_output().map_err(|_| ())?;
+            if self.io.out_buf.len() >= self.waterline {
+                return Ok(Async::NotReady);
+            }
+        }
+        while let Async::Ready(value) = self.channel.poll()?  {
+            let metric = match value {
+                None => break,
+                Some(x) => x,
+            };
+            if self.io.out_buf.len() >= self.waterline {
+                break;
+            }
+            self.io.out_buf.extend(&metric.0);
+        }
         self.flush_output().map_err(|_| ())?;
+        if self.channel.is_done() && self.io.out_buf.len() == 0 {
+            return Ok(Async::Ready(()));
+        }
         return Ok(Async::NotReady);
     }
 }
 
-impl<T: Io, S: Stream> Proto<T, S> {
+impl<T: Io, S: Stream<Item=Metric, Error=()>> Proto<T, S> {
 
     fn flush_output(&mut self) -> io::Result<()> {
         let old_out = self.io.out_buf.len();

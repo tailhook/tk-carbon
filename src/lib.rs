@@ -12,3 +12,4 @@ mod element;
 mod proto;
 
 pub use public::Carbon;
+pub use proto::Proto;
