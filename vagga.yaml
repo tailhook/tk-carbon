@@ -15,6 +15,30 @@ commands:
     container: ubuntu
     run: [cargo, test]
 
+  carbon: &carbon !Command
+    description: Run carbon
+    container: graphite
+    work-dir: /opt/graphite
+    run: |
+      rm /work/integrations/tmp/carbon-cache-a.pid || true
+      ./bin/carbon-cache.py start --debug
+
+  graphite-web: &graphite !Command
+    description: Run graphite-web
+    container: graphite
+    work-dir: /opt/graphite/webapp/graphite
+    run:
+    - python
+    - manage.py
+    - runserver
+
+  _init_graphite: !Command
+    description: Init graphite-web (cantal can submit data to carbon)
+    container: graphite
+    work-dir: /opt/graphite/webapp/graphite
+    run: |
+      python manage.py syncdb --noinput
+
 containers:
 
   ubuntu:
@@ -83,4 +107,6 @@ containers:
           >> /opt/graphite/webapp/graphite/settings.py
     auto-clean: true
     volumes:
-      /opt/graphite/storage: !BindRW /work/tmp
+      /opt/graphite/storage: !Persistent
+        name: graphite
+        init-command: _init_graphite
