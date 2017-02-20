@@ -19,3 +19,7 @@ log = "0.3.6"
 abstract-ns = "0.2.4"
 num-traits = "0.1.36"
 tk-bufstream = "0.2.4"
+
+[dev-dependencies]
+tk-easyloop = "0.1.1"
+regex = "0.2.1"
