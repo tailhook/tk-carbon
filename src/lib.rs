@@ -13,3 +13,13 @@ mod proto;
 
 pub use public::Carbon;
 pub use proto::Proto;
+
+use std::sync::Arc;
+use std::sync::atomic::AtomicUsize;
+use futures::sync::mpsc::{UnboundedReceiver};
+
+/// A helper structure for initializing protocol instance
+pub struct Init {
+    channel: UnboundedReceiver<element::Metric>,
+    buffered: Arc<AtomicUsize>,
+}

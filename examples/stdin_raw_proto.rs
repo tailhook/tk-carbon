@@ -2,23 +2,33 @@ extern crate futures;
 extern crate regex;
 extern crate tk_easyloop;
 extern crate tk_carbon;
+extern crate tokio_core;
 
 use std::io::{self, BufRead};
+use std::net::SocketAddr;
 use std::thread;
+use std::time::Duration;
 
-use futures::sync::mpsc::unbounded;
+use futures::Future;
 use regex::Regex;
-use tk_carbon::Proto;
+use tk_carbon::Carbon;
 use tokio_core::net::TcpStream;
 
 
 fn main() {
-    let (tx, rx) = unbounded();
+    let (carbon, init) = Carbon::new(100);
     // run io in thread because stdin is not officially supported in
     // mio/tokio yet
     thread::spawn(|| {
         tk_easyloop::run(|| {
-            Ok(());
+            TcpStream::connect(&SocketAddr::new("127.0.0.1".parse().unwrap(),
+                                                2003),
+                               &tk_easyloop::handle())
+            .map_err(|e| println!("Carbon error: {}", e))
+            .and_then(|sock| {
+                init.from_connection(sock, Duration::new(10, 0), 16384,
+                    &tk_easyloop::handle())
+            })
         })
     });
     let regex = Regex::new(r"^([a-zA-Z0-9\.-]+)(?:\s+(\d+))$").unwrap();
@@ -32,7 +42,10 @@ fn main() {
         if let Some(capt) = regex.captures(&line) {
             let name = capt.get(1).unwrap().as_str();
             let value: i64 = capt.get(2).unwrap().as_str().parse().unwrap();
-            println!("Metric {:?} value {:?}", name, value);
+            carbon.add_value(format_args!("test.{}", name), value);
+            println!("Metric {:?} value {:?}",
+                format_args!("test.{}", name),
+                value);
         } else {
             println!("Invalid format. Use `metric.name 1235`.");
         }

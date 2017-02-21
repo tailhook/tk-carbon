@@ -4,10 +4,11 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use futures::sync::mpsc::UnboundedSender;
+use futures::sync::mpsc::{unbounded, UnboundedSender};
 use num_traits::Num;
 
 use element::{Metric};
+use {Init};
 
 /// A structure that is used to submit values to carbon
 ///
@@ -21,6 +22,23 @@ pub struct Carbon {
 }
 
 impl Carbon {
+    /// This creates an instance of the Carbon public interface and `Init`
+    /// structure that can be used to initialize a Proto instance
+    pub fn new(max_metrics_buffered: usize) -> (Carbon, Init) {
+        let (tx, rx) = unbounded();
+        let counter = Arc::new(AtomicUsize::new(0));
+        return (
+            Carbon {
+                channel: tx,
+                buffered: counter.clone(),
+                max_metrics_buffered: max_metrics_buffered,
+            },
+            Init {
+                channel: rx,
+                buffered: counter,
+            }
+        )
+    }
     /// Add any numeric value for carbon with current timestamp
     ///
     /// # Example
@@ -75,6 +93,7 @@ impl Carbon {
             .filter(|&&x| x == b' ' || x == b'\n' || x == b'\n')
             .count() == 3, // exactly two spaces and a newline at the end
             "Metric should not contain any spaces or newlines inside");
+        self.buffered.fetch_add(1, Ordering::Relaxed);
         self.channel.send(Metric(buf))
         // This shouldn't happen actually
         .map_err(|_| debug!("Can't send metric {}, \
