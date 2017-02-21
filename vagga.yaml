@@ -38,6 +38,7 @@ commands:
     work-dir: /opt/graphite/webapp/graphite
     run: |
       python manage.py syncdb --noinput
+      mkdir -p /opt/graphite/storage/log/webapp
 
 containers:
 
