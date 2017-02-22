@@ -1,5 +1,6 @@
 #![warn(missing_docs)]
 
+extern crate abstract_ns;
 extern crate futures;
 extern crate num_traits;
 extern crate tokio_core;
@@ -10,6 +11,7 @@ extern crate tk_bufstream;
 mod public;
 mod element;
 mod proto;
+mod pool;
 
 pub use public::Carbon;
 pub use proto::Proto;
