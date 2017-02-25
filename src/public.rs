@@ -8,7 +8,7 @@ use futures::sync::mpsc::{unbounded, UnboundedSender};
 use num_traits::Num;
 
 use element::{Metric};
-use {Init};
+use {Init, Config};
 
 /// A structure that is used to submit values to carbon
 ///
@@ -18,24 +18,25 @@ use {Init};
 pub struct Carbon {
     channel: UnboundedSender<Metric>,
     buffered: Arc<AtomicUsize>,
-    max_metrics_buffered: usize,
+    config: Arc<Config>,
 }
 
 impl Carbon {
     /// This creates an instance of the Carbon public interface and `Init`
     /// structure that can be used to initialize a Proto instance
-    pub fn new(max_metrics_buffered: usize) -> (Carbon, Init) {
+    pub fn new(config: &Arc<Config>) -> (Carbon, Init) {
         let (tx, rx) = unbounded();
         let counter = Arc::new(AtomicUsize::new(0));
         return (
             Carbon {
                 channel: tx,
                 buffered: counter.clone(),
-                max_metrics_buffered: max_metrics_buffered,
+                config: config.clone(),
             },
             Init {
                 channel: rx,
                 buffered: counter,
+                config: config.clone(),
             }
         )
     }
@@ -80,7 +81,8 @@ impl Carbon {
     pub fn add_value_at<N, V>(&self, name: N, value: V, ts: SystemTime)
         where N: Display, V: Num + Display
     {
-        if self.buffered.load(Ordering::Relaxed) > self.max_metrics_buffered {
+        let max = self.config.max_metrics_buffered;
+        if self.buffered.load(Ordering::Relaxed) > max {
             trace!("Warning can't send metric {}, buffer is full", name);
             return;
         }
@@ -107,6 +109,6 @@ impl fmt::Debug for Carbon {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "Carbon({}/{})",
             self.buffered.load(Ordering::Relaxed),
-            self.max_metrics_buffered)
+            self.config.max_metrics_buffered)
     }
 }

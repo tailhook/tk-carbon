@@ -26,6 +26,7 @@ use futures::sync::mpsc::{UnboundedReceiver};
 pub struct Init {
     channel: UnboundedReceiver<element::Metric>,
     buffered: Arc<AtomicUsize>,
+    config: Arc<Config>,
 }
 
 /// Configuration of carbon protocol

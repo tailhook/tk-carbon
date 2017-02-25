@@ -13,12 +13,12 @@ use std::thread;
 
 use abstract_ns::Resolver;
 use regex::Regex;
-use tk_carbon::Carbon;
+use tk_carbon::{Carbon, Config};
 
 
 fn main() {
     let name = args().skip(1).next().unwrap_or("localhost:2003".to_string());
-    let (carbon, init) = Carbon::new(100);
+    let (carbon, init) = Carbon::new(&Config::new().done());
     // run io in thread because stdin is not officially supported in
     // mio/tokio yet
     thread::spawn(|| {

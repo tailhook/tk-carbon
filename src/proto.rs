@@ -1,6 +1,5 @@
 use std::io;
 use std::sync::Arc;
-use std::time::Duration;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use futures::{Stream, Future, Async};
@@ -11,7 +10,7 @@ use tokio_core::io::Io;
 use tokio_core::reactor::{Handle, Timeout};
 
 use element::Metric;
-use {Init};
+use {Init, Config};
 
 
 /// Low-level interface to a single carbon connection
@@ -19,27 +18,24 @@ pub struct Proto<T: Io> {
     io: IoBuf<T>,
     channel: Fuse<UnboundedReceiver<Metric>>,
     buffered: Arc<AtomicUsize>,
-    timeout: Duration,
+    config: Arc<Config>,
     timeo: Timeout,
     handle: Handle,
-    waterline: usize,
 }
 
 impl Init {
     /// Wrap existing connection into a future that implements carbon protocol
-    pub fn from_connection<T: Io>(self, conn: T, write_timeout: Duration,
-        waterline: usize, handle: &Handle)
+    pub fn from_connection<T: Io>(self, conn: T, handle: &Handle)
         -> Proto<T>
     {
         Proto {
             io: IoBuf::new(conn),
             buffered: self.buffered,
             channel: self.channel.fuse(),
-            timeout: write_timeout,
-            timeo: Timeout::new(write_timeout, &handle)
+            timeo: Timeout::new(self.config.write_timeout, &handle)
                 .expect("can always set a timeout"),
             handle: handle.clone(),
-            waterline: waterline,
+            config: self.config,
         }
     }
 }
@@ -57,9 +53,9 @@ impl<T: Io> Future for Proto<T> {
             // connection closed by peer is just finish of a future
             return Ok(Async::Ready(()));
         }
-        if self.io.out_buf.len() >= self.waterline {
+        if self.io.out_buf.len() >= self.config.watermarks.0 {
             self.flush_output().map_err(|_| ())?;
-            if self.io.out_buf.len() >= self.waterline {
+            if self.io.out_buf.len() >= self.config.watermarks.0 {
                 return Ok(Async::NotReady);
             }
         }
@@ -69,7 +65,7 @@ impl<T: Io> Future for Proto<T> {
                 Some(x) => x,
             };
             self.buffered.fetch_sub(1, Ordering::Relaxed);
-            if self.io.out_buf.len() >= self.waterline {
+            if self.io.out_buf.len() >= self.config.watermarks.0 {
                 break;
             }
             self.io.out_buf.extend(&metric.0);
@@ -91,7 +87,8 @@ impl<T: Io> Proto<T> {
             let new_out = self.io.out_buf.len();
             if new_out != old_out {
                 if new_out != 0 {
-                    self.timeo = Timeout::new(self.timeout, &self.handle)?;
+                    self.timeo = Timeout::new(
+                        self.config.write_timeout, &self.handle)?;
                     self.timeo.poll()?;  // schedule a timeout
                 }
             } else {

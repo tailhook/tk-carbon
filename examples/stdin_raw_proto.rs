@@ -11,12 +11,12 @@ use std::time::Duration;
 
 use futures::Future;
 use regex::Regex;
-use tk_carbon::Carbon;
+use tk_carbon::{Carbon, Config};
 use tokio_core::net::TcpStream;
 
 
 fn main() {
-    let (carbon, init) = Carbon::new(100);
+    let (carbon, init) = Carbon::new(&Config::new().done());
     // run io in thread because stdin is not officially supported in
     // mio/tokio yet
     thread::spawn(|| {
@@ -26,8 +26,7 @@ fn main() {
                                &tk_easyloop::handle())
             .map_err(|e| println!("Carbon error: {}", e))
             .and_then(|sock| {
-                init.from_connection(sock, Duration::new(10, 0), 16384,
-                    &tk_easyloop::handle())
+                init.from_connection(sock, &tk_easyloop::handle())
             })
         })
     });
