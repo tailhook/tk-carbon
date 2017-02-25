@@ -12,6 +12,7 @@ mod public;
 mod element;
 mod proto;
 mod pool;
+mod config;
 
 pub use public::Carbon;
 pub use proto::Proto;
@@ -30,6 +31,7 @@ pub struct Init {
 /// Configuration of carbon protocol
 ///
 /// This configuration is used both for single connection and connection pool.
+#[derive(Clone, Debug)]
 pub struct Config {
     write_timeout: Duration,
     watermarks: (usize, usize),

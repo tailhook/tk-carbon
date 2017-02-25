@@ -1,3 +1,4 @@
+use std::sync::Arc;
 use std::time::Duration;
 
 use {Config};
@@ -33,7 +34,7 @@ impl Config {
     /// reconnect immediately.
     pub fn reconnect_delay(&mut self, delay: Duration) -> &mut Self {
         let ms = to_ms(delay);
-        self.reconnect_delay = (delay/2, delay*3/2);
+        self.reconnect_delay = (ms/2, ms*3/2);
         self
     }
 
