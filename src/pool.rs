@@ -1,22 +1,18 @@
 use std::collections::VecDeque;
 use std::net::SocketAddr;
-use std::sync::Arc;
-use std::sync::atomic::AtomicUsize;
 
 use abstract_ns::Address;
 use futures::{Future, Async, Stream};
-use futures::sync::mpsc::{UnboundedReceiver};
 use tokio_core::reactor::Handle;
 use tokio_core::net::TcpStream;
 
-use element::Metric;
+use channel::Receiver;
 use {Init, Proto};
 
 
 struct Pool<A> {
     address_stream: A,
-    buffered: Arc<AtomicUsize>,
-    channel: UnboundedReceiver<Metric>,
+    channel: Receiver,
     handle: Handle,
 
     cur_address: Option<Address>,
@@ -39,8 +35,7 @@ impl Init {
         handle.spawn(Pool {
             address_stream: address_stream,
             handle: handle.clone(),
-            channel: self.channel,
-            buffered: self.buffered,
+            channel: self.chan,
 
             cur_address: None,
             active: VecDeque::new(),

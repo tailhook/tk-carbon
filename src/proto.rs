@@ -1,23 +1,19 @@
 use std::io;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicUsize, Ordering};
 
 use futures::{Stream, Future, Async};
-use futures::sync::mpsc::{UnboundedReceiver};
-use futures::stream::Fuse;
 use tk_bufstream::IoBuf;
 use tokio_core::io::Io;
 use tokio_core::reactor::{Handle, Timeout};
 
-use element::Metric;
+use channel::Receiver;
 use {Init, Config};
 
 
 /// Low-level interface to a single carbon connection
 pub struct Proto<T: Io> {
     io: IoBuf<T>,
-    channel: Fuse<UnboundedReceiver<Metric>>,
-    buffered: Arc<AtomicUsize>,
+    channel: Receiver,
     config: Arc<Config>,
     timeo: Timeout,
     handle: Handle,
@@ -30,8 +26,7 @@ impl Init {
     {
         Proto {
             io: IoBuf::new(conn),
-            buffered: self.buffered,
-            channel: self.channel.fuse(),
+            channel: self.chan,
             timeo: Timeout::new(self.config.write_timeout, &handle)
                 .expect("can always set a timeout"),
             handle: handle.clone(),
@@ -59,16 +54,11 @@ impl<T: Io> Future for Proto<T> {
                 return Ok(Async::NotReady);
             }
         }
-        while let Async::Ready(value) = self.channel.poll()?  {
-            let metric = match value {
-                None => break,
-                Some(x) => x,
-            };
-            self.buffered.fetch_sub(1, Ordering::Relaxed);
+        while let Async::Ready(Some(metric)) = self.channel.poll()?  {
+            self.io.out_buf.extend(&metric.0);
             if self.io.out_buf.len() >= self.config.watermarks.0 {
                 break;
             }
-            self.io.out_buf.extend(&metric.0);
         }
         self.flush_output().map_err(|_| ())?;
         if self.channel.is_done() && self.io.out_buf.len() == 0 {

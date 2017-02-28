@@ -4,10 +4,10 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use futures::sync::mpsc::{unbounded, UnboundedSender};
 use num_traits::Num;
 
 use element::{Metric};
+use channel::{channel, Sender};
 use {Init, Config};
 
 /// A structure that is used to submit values to carbon
@@ -16,26 +16,20 @@ use {Init, Config};
 /// network connection(s)
 #[derive(Clone)]
 pub struct Carbon {
-    channel: UnboundedSender<Metric>,
-    buffered: Arc<AtomicUsize>,
-    config: Arc<Config>,
+    chan: Sender,
 }
 
 impl Carbon {
     /// This creates an instance of the Carbon public interface and `Init`
     /// structure that can be used to initialize a Proto instance
     pub fn new(config: &Arc<Config>) -> (Carbon, Init) {
-        let (tx, rx) = unbounded();
-        let counter = Arc::new(AtomicUsize::new(0));
+        let (tx, rx) = channel(config.max_metrics_buffered);
         return (
             Carbon {
-                channel: tx,
-                buffered: counter.clone(),
-                config: config.clone(),
+                chan: tx,
             },
             Init {
-                channel: rx,
-                buffered: counter,
+                chan: rx,
                 config: config.clone(),
             }
         )
@@ -81,11 +75,6 @@ impl Carbon {
     pub fn add_value_at<N, V>(&self, name: N, value: V, ts: SystemTime)
         where N: Display, V: Num + Display
     {
-        let max = self.config.max_metrics_buffered;
-        if self.buffered.load(Ordering::Relaxed) > max {
-            trace!("Warning can't send metric {}, buffer is full", name);
-            return;
-        }
         let mut buf = Vec::with_capacity(100);
         let tm = ts.duration_since(UNIX_EPOCH)
             .expect("time is larger than epoch");
@@ -95,20 +84,13 @@ impl Carbon {
             .filter(|&&x| x == b' ' || x == b'\n' || x == b'\n')
             .count() == 3, // exactly two spaces and a newline at the end
             "Metric should not contain any spaces or newlines inside");
-        self.buffered.fetch_add(1, Ordering::Relaxed);
-        self.channel.send(Metric(buf))
-        // This shouldn't happen actually
-        .map_err(|_| debug!("Can't send metric {}, \
-            connection has been shut down", name))
-        // but we don't want it to be fatal
-        .ok();
+        self.chan.send(Metric(buf));
     }
 }
 
 impl fmt::Debug for Carbon {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "Carbon({}/{})",
-            self.buffered.load(Ordering::Relaxed),
-            self.config.max_metrics_buffered)
+        let (a, b) = self.chan.buffered();
+        write!(f, "Carbon({}/{})", a, b)
     }
 }
