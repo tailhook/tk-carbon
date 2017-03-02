@@ -1,7 +1,6 @@
 use std::fmt::{self, Display};
 use std::io::Write;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use num_traits::Num;

@@ -7,11 +7,6 @@ pub fn to_ms(dur: Duration) -> u64 {
     return dur.as_secs() + (dur.subsec_nanos() / 1000000) as u64;
 }
 
-pub fn from_ms(ms: u64) -> Duration {
-    return Duration::new(ms / 1000, (ms % 1000) as u32 * 1000000);
-}
-
-
 impl Config {
     /// Create the config builder with all defaults
     pub fn new() -> Config {

@@ -6,6 +6,7 @@ extern crate regex;
 extern crate tk_carbon;
 extern crate tk_easyloop;
 extern crate tokio_core;
+extern crate env_logger;
 
 use std::env::args;
 use std::io::{self, BufRead};
@@ -17,6 +18,7 @@ use tk_carbon::{Carbon, Config};
 
 
 fn main() {
+    env_logger::init().expect("init logging");
     let name = args().skip(1).next().unwrap_or("localhost:2003".to_string());
     let (carbon, init) = Carbon::new(&Config::new().done());
     // run io in thread because stdin is not officially supported in

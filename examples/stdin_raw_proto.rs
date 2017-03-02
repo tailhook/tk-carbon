@@ -7,7 +7,6 @@ extern crate tokio_core;
 use std::io::{self, BufRead};
 use std::net::SocketAddr;
 use std::thread;
-use std::time::Duration;
 
 use futures::Future;
 use regex::Regex;

@@ -5,6 +5,7 @@ extern crate futures;
 extern crate num_traits;
 extern crate tokio_core;
 extern crate tk_bufstream;
+extern crate rand;
 
 #[macro_use] extern crate log;
 
