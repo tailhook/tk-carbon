@@ -1,3 +1,47 @@
+//! Carbon client protocol implementation
+//!
+//! # High Level Interface
+//!
+//! ```rust,ignore
+//! let (carbon, init) = Carbon::new(&Config::new().done());
+//! init.connect_to(resolver.subscribe("localhost:2003"), &handle);
+//! // now you can submit metrics
+//! carbon.add_metric("my.metric", 10);
+//! ```
+//!
+//! This allows protocol to:
+//!
+//! 1. Establish connection to all addressses address resolves too
+//! 2. Reconnect in case of failure
+//! 3. Reconnect to new host(s) when IPs the DNS name resolves to changes
+//!
+//! See [examples](https://github.com/tailhook/tk-carbon/tree/master/examples)
+//! for more full examples.
+//!
+//! # Lower Level Interface
+//!
+//! In case you don't want to use connection pooling, you may connect carbon
+//! instance to a specific connection:
+//!
+//! ```
+//! let (carbon, init) = Carbon::new(&Config::new().done());
+//! handle.spawn(TcpStream::connect(&addr, &handle)
+//!     .and_then(move |sock| init.from_connection(sock, &handle2))
+//!     .map_err(|e| unimplemented!()));
+//! // use carbon the same way as above
+//! carbon.add_metric("my.metric", 10);
+//! ```
+//!
+//! # General
+//!
+//! [`Carbon`](struct.Carbon.html) object is the same for connection pool and
+//! raw interface and may be used from any thread as long as the tokio loop
+//! running the networking code is still alive.
+//!
+//! You don't have to wait until connection is established to send metrics,
+//! they will be buffered up till configuration limit
+//! (see docs on [`Config`](struct.Config.html))
+//!
 #![warn(missing_docs)]
 
 extern crate abstract_ns;
