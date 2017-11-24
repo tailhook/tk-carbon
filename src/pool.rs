@@ -11,6 +11,7 @@ use tk_bufstream::IoBuf;
 use tokio_io::{AsyncWrite};
 use tokio_core::net::TcpStream;
 use tokio_core::reactor::{Handle, Timeout};
+use void::{Void, unreachable};
 
 use channel::Receiver;
 use {Init, Config};
@@ -46,7 +47,7 @@ impl Init {
     /// by handle. The future exits when all references to API (`Carbon`
     /// structure) are dropped and all buffers are flushed.
     pub fn connect_to<S>(self, address_stream: S, handle: &Handle)
-        where S: Stream<Item=Address> + 'static,
+        where S: Stream<Item=Address, Error=Void> + 'static,
     {
         handle.spawn(Pool {
             address_stream: address_stream,
@@ -67,18 +68,24 @@ impl Init {
     }
 }
 
-impl<S: Stream<Item=Address>> Future for Pool<S> {
+impl<S: Stream<Item=Address, Error=Void>> Future for Pool<S> {
     type Item = ();
     type Error = ();
     fn poll(&mut self) -> Result<Async<()>, ()> {
         loop {
-            self.update_addresses()?;
+            match self.update_addresses() {
+                Async::Ready(()) => {
+                    info!("Eof on address stream, shutting down");
+                    return Ok(Async::Ready(()));
+                }
+                Async::NotReady => {}
+            }
+            self.reconnect_failed();
             self.check_pending();
             self.read_check();
             self.push_crowded();
             self.new_metrics();
             self.flush_metrics();
-            self.reconnect_failed();
             let ndeadline = self.calc_deadline();
             if ndeadline != self.deadline {
                 self.deadline = ndeadline;
@@ -98,57 +105,66 @@ impl<S: Stream<Item=Address>> Future for Pool<S> {
     }
 }
 
-impl<S: Stream<Item=Address>> Pool<S> {
-    fn update_addresses(&mut self) -> Result<(), ()> {
-        let new_addr = match self.address_stream.poll() {
-            Ok(Async::Ready(Some(new_addr))) => new_addr,
-            Ok(Async::NotReady) => return Ok(()),
-            Ok(Async::Ready(None)) => {
-                panic!("Address stream must be infinite");
-            }
-            Err(_) => {
-                // TODO(tailhook) pool should crash?
-                error!("Address stream error");
-                return Err(());
-            }
-        };
-        if let Some(ref mut old_addr) = self.cur_address {
-            if old_addr != &new_addr {
-                let (old, new) = old_addr.at(0)
-                               .compare_addresses(&new_addr.at(0));
-                debug!("New addresss, to be retired {:?}, \
-                        to be connected {:?}", old, new);
-                for _ in 0..self.pending.len() {
-                    let (addr, c) = self.pending.pop_front().unwrap();
-                    // Drop pending connections to non-existing
-                    // addresses
-                    if !old.contains(&addr) {
-                        self.pending.push_back((addr, c));
-                    } else {
-                        debug!("Dropped pending {}", addr);
+impl<S: Stream<Item=Address, Error=Void>> Pool<S> {
+    fn update_addresses(&mut self) -> Async<()> {
+        loop {
+            let new_addr = match self.address_stream.poll() {
+                Ok(Async::Ready(Some(new_addr))) => new_addr,
+                Ok(Async::NotReady) => return Async::NotReady,
+                Ok(Async::Ready(None)) => return Async::Ready(()),
+                Err(void) => unreachable(void),
+            };
+            if let Some(ref mut old_addr) = self.cur_address {
+                if old_addr != &new_addr {
+                    let (old, new) = old_addr.at(0)
+                                   .compare_addresses(&new_addr.at(0));
+                    debug!("New addresss, to be retired {:?}, \
+                            to be connected {:?}", old, new);
+                    for _ in 0..self.pending.len() {
+                        let (addr, c) = self.pending.pop_front().unwrap();
+                        // Drop pending connections to non-existing
+                        // addresses
+                        if !old.contains(&addr) {
+                            self.pending.push_back((addr, c));
+                        } else {
+                            debug!("Dropped pending {}", addr);
+                        }
+                    }
+                    for _ in 0..self.normal.len() {
+                        let (addr, c) = self.normal.pop_front().unwrap();
+                        // Active connections are waiting to become idle
+                        if old.contains(&addr) {
+                            debug!("Retiring {}", addr);
+                            self.retired.push_back(c);
+                        } else {
+                            self.normal.push_back((addr, c));
+                        }
+                    }
+                    for _ in 0..self.crowded.len() {
+                        let (addr, c) = self.crowded.pop_front().unwrap();
+                        // Active connections are waiting to become idle
+                        if old.contains(&addr) {
+                            debug!("Retiring {}", addr);
+                            self.retired.push_back(c);
+                        } else {
+                            self.crowded.push_back((addr, c));
+                        }
+                    }
+                    for addr in new {
+                        self.pending.push_back((addr, Box::new(
+                            // TODO(tailhook) timeout on connect
+                            TcpStream::connect(&addr, &self.handle)
+                            .map(|sock | Conn {
+                                io: IoBuf::new(sock),
+                                deadline: Instant::now()
+                                    // no data yet
+                                    + Duration::new(86400, 0),
+                            })
+                        )));
                     }
                 }
-                for _ in 0..self.normal.len() {
-                    let (addr, c) = self.normal.pop_front().unwrap();
-                    // Active connections are waiting to become idle
-                    if old.contains(&addr) {
-                        debug!("Retiring {}", addr);
-                        self.retired.push_back(c);
-                    } else {
-                        self.normal.push_back((addr, c));
-                    }
-                }
-                for _ in 0..self.crowded.len() {
-                    let (addr, c) = self.crowded.pop_front().unwrap();
-                    // Active connections are waiting to become idle
-                    if old.contains(&addr) {
-                        debug!("Retiring {}", addr);
-                        self.retired.push_back(c);
-                    } else {
-                        self.crowded.push_back((addr, c));
-                    }
-                }
-                for addr in new {
+            } else {
+                for addr in new_addr.at(0).addresses() {
                     self.pending.push_back((addr, Box::new(
                         // TODO(tailhook) timeout on connect
                         TcpStream::connect(&addr, &self.handle)
@@ -161,21 +177,7 @@ impl<S: Stream<Item=Address>> Pool<S> {
                     )));
                 }
             }
-        } else {
-            for addr in new_addr.at(0).addresses() {
-                self.pending.push_back((addr, Box::new(
-                    // TODO(tailhook) timeout on connect
-                    TcpStream::connect(&addr, &self.handle)
-                    .map(|sock | Conn {
-                        io: IoBuf::new(sock),
-                        deadline: Instant::now()
-                            // no data yet
-                            + Duration::new(86400, 0),
-                    })
-                )));
-            }
         }
-        Ok(())
     }
     fn check_pending(&mut self) {
         for _ in 0..self.pending.len() {

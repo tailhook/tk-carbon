@@ -53,6 +53,7 @@ extern crate tokio_core;
 extern crate tokio_io;
 extern crate tk_bufstream;
 extern crate rand;
+extern crate void;
 
 #[macro_use] extern crate log;
 
