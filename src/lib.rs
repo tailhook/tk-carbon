@@ -23,7 +23,9 @@
 //! In case you don't want to use connection pooling, you may connect carbon
 //! instance to a specific connection:
 //!
-//! ```
+//! ```rust,ignore
+//! use tk_carbon::{Carbon, Config};
+//!
 //! let (carbon, init) = Carbon::new(&Config::new().done());
 //! handle.spawn(TcpStream::connect(&addr, &handle)
 //!     .and_then(move |sock| init.from_connection(sock, &handle2))

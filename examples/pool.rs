@@ -29,7 +29,7 @@ fn main() {
                 futures_cpupool::CpuPool::new(1));
             init.connect_to(resolver.subscribe(&name), &tk_easyloop::handle());
             Ok::<(), ()>(())
-        });
+        }).unwrap();
     });
     let regex = Regex::new(r"^([a-zA-Z0-9\.-]+)(?:\s+(\d+))$").unwrap();
     println!("Enter `metric.name 134`:");
