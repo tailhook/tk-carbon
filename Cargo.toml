@@ -9,7 +9,7 @@ keywords = ["tokio", "carbon", "graphite", "metrics"]
 categories = ["asynchronous", "network-programming"]
 homepage = "http://github.com/tailhook/tk-carbon"
 documentation = "http://docs.rs/tk-carbon"
-version = "0.1.0"
+version = "0.2.0"
 authors = ["paul@colomiets.name"]
 
 [dependencies]
