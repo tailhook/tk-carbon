@@ -1,5 +1,9 @@
 //! Carbon client protocol implementation
 //!
+//! [Documentation](https://docs.rs/tk-carbon) |
+//! [Github](https://github.com/tailhook/tk-carbon) |
+//! [Crate](https://crates.io/crates/tk-carbon)
+//!
 //! # High Level Interface
 //!
 //! ```rust,ignore

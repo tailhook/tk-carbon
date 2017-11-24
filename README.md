@@ -1,9 +1,11 @@
-=========================
 Carbon Bindings for Tokio
 =========================
 
-:Status: Beta
-:Documentation: http://docs.rs/tk-carbon/
+**Status: Beta**
+
+[Documentation](https://docs.rs/tk-carbon) |
+[Github](https://github.com/tailhook/tk-carbon) |
+[Crate](https://crates.io/crates/tk-carbon)
 
 
 A library to submit data to carbon (graphite). Works in asynchronous main
