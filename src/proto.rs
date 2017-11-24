@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use futures::{Stream, Future, Async};
 use tk_bufstream::IoBuf;
-use tokio_core::io::Io;
+use tokio_io::{AsyncRead, AsyncWrite};
 use tokio_core::reactor::{Handle, Timeout};
 
 use channel::Receiver;
@@ -11,7 +11,7 @@ use {Init, Config};
 
 
 /// Low-level interface to a single carbon connection
-pub struct Proto<T: Io> {
+pub struct Proto<T> {
     io: IoBuf<T>,
     channel: Receiver,
     config: Arc<Config>,
@@ -21,7 +21,7 @@ pub struct Proto<T: Io> {
 
 impl Init {
     /// Wrap existing connection into a future that implements carbon protocol
-    pub fn from_connection<T: Io>(self, conn: T, handle: &Handle)
+    pub fn from_connection<T>(self, conn: T, handle: &Handle)
         -> Proto<T>
     {
         Proto {
@@ -35,7 +35,7 @@ impl Init {
     }
 }
 
-impl<T: Io> Future for Proto<T> {
+impl<T: AsyncRead+AsyncWrite> Future for Proto<T> {
     type Item = ();
     type Error = ();
     fn poll(&mut self) -> Result<Async<()>, ()> {
@@ -68,7 +68,7 @@ impl<T: Io> Future for Proto<T> {
     }
 }
 
-impl<T: Io> Proto<T> {
+impl<T: AsyncWrite> Proto<T> {
 
     fn flush_output(&mut self) -> io::Result<()> {
         let old_out = self.io.out_buf.len();

@@ -44,7 +44,7 @@ impl Sender {
             return;
         }
         self.buffered.fetch_add(1, Ordering::Relaxed);
-        self.channel.send(metric)
+        self.channel.unbounded_send(metric)
         // This shouldn't happen actually
         .map_err(|_| debug!("Can't send metric, \
             connection has been shut down"))

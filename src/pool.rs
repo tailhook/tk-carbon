@@ -8,7 +8,7 @@ use abstract_ns::Address;
 use futures::{Future, Async, Stream};
 use rand::{thread_rng, Rng};
 use tk_bufstream::IoBuf;
-use tokio_core::io::Io;
+use tokio_io::{AsyncWrite};
 use tokio_core::net::TcpStream;
 use tokio_core::reactor::{Handle, Timeout};
 
@@ -33,7 +33,7 @@ struct Pool<A> {
     failed: VecDeque<(SocketAddr, Instant)>,
 }
 
-struct Conn<T: Io> {
+struct Conn<T> {
     io: IoBuf<T>,
     deadline: Instant,
 }
@@ -320,7 +320,7 @@ impl<S: Stream<Item=Address>> Pool<S> {
     }
 }
 
-impl<S: Io> Conn<S> {
+impl<S: AsyncWrite> Conn<S> {
     fn flush(&mut self, cfg: &Config) -> Result<(), io::Error> {
         let old_out = self.io.out_buf.len();
         if old_out > 0 {

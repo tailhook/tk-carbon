@@ -1,6 +1,7 @@
 extern crate abstract_ns;
 extern crate futures;
 extern crate futures_cpupool;
+extern crate ns_router;
 extern crate ns_std_threaded;
 extern crate regex;
 extern crate tk_carbon;
@@ -11,10 +12,13 @@ extern crate env_logger;
 use std::env::args;
 use std::io::{self, BufRead};
 use std::thread;
+use std::time::Duration;
 
-use abstract_ns::Resolver;
+use abstract_ns::{HostResolve};
+use ns_router::{Router, SubscribeExt, Config as NsConfig};
 use regex::Regex;
 use tk_carbon::{Carbon, Config};
+use tk_easyloop::handle;
 
 
 fn main() {
@@ -24,10 +28,16 @@ fn main() {
     // run io in thread because stdin is not officially supported in
     // mio/tokio yet
     thread::spawn(|| {
-        tk_easyloop::run_forever(move || {
-            let resolver = ns_std_threaded::ThreadedResolver::new(
-                futures_cpupool::CpuPool::new(1));
-            init.connect_to(resolver.subscribe(&name), &tk_easyloop::handle());
+        let mut keep_router = None;
+        tk_easyloop::run_forever(|| {
+            let router = Router::from_config(&NsConfig::new()
+                .set_fallthrough(ns_std_threaded::ThreadedResolver::new()
+                    .null_service_resolver()
+                    .interval_subscriber(Duration::new(1, 0), &handle()))
+                .done(), &tk_easyloop::handle());
+            keep_router = Some(router.clone());
+            init.connect_to(router.subscribe_many(&[name], 2003),
+                &tk_easyloop::handle());
             Ok::<(), ()>(())
         }).unwrap();
     });

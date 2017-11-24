@@ -50,6 +50,7 @@ extern crate abstract_ns;
 extern crate futures;
 extern crate num_traits;
 extern crate tokio_core;
+extern crate tokio_io;
 extern crate tk_bufstream;
 extern crate rand;
 
